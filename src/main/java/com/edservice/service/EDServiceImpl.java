@@ -1,6 +1,8 @@
 package com.edservice.service;
 
 
+import java.time.LocalDate;
+import java.time.Period;
 import java.util.List;
 import java.util.Optional;
 
@@ -10,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import com.edservice.binding.EligibilityDetermination;
 import com.edservice.entity.CitizenDetailsEntity;
+import com.edservice.entity.CoTrigger;
 import com.edservice.entity.DcCaseEntity;
 import com.edservice.entity.EducationEntity;
 import com.edservice.entity.EligibilityEntity;
@@ -17,6 +20,7 @@ import com.edservice.entity.IncomeEntity;
 import com.edservice.entity.KidsEntity;
 import com.edservice.entity.PlanEntity;
 import com.edservice.repository.CitizenDetailsRepository;
+import com.edservice.repository.CoTriggerRepository;
 import com.edservice.repository.DCCasesRepository;
 import com.edservice.repository.EducationRepository;
 import com.edservice.repository.EligibilityRepository;
@@ -48,205 +52,149 @@ public class EDServiceImpl implements EDService {
 	@Autowired
 	private EligibilityRepository elrepo;
 	
+	@Autowired
+	private CoTriggerRepository corepo;
+	
 	@Override
 	public EligibilityDetermination determinEligilibility(Long caseNum) {
 		
 		Integer planCategoryId = 0;
 		Integer appId = 0;
+		String planName = null;
+		int age = 0;
+		CitizenDetailsEntity citizenentity = null;
+		
 		Optional<DcCaseEntity> dcentity = dcrepo.findById(caseNum);
 		if(dcentity.isPresent()) {
 		    planCategoryId = dcentity.get().getPlanCategoryId();
 		    appId = dcentity.get().getAppId();
 		}
-		switch (planCategoryId) {
-		case 1:
-			  EligibilityDetermination determineSnap = determineSnap(caseNum, appId, planCategoryId);
-			  return determineSnap;
-		case 2:
-			  EligibilityDetermination determineCcap = determineCcap(caseNum, appId, planCategoryId);
-              return determineCcap;
-		case 3:
-		         EligibilityDetermination determineMedicait = determineMedicait(caseNum, appId, planCategoryId);
-		         return determineMedicait;		    
-		case 4:
-			     EligibilityDetermination determineMedicare = determineMedicare(caseNum, appId, planCategoryId);
-			     return determineMedicare;
-		case 5:
-			    EligibilityDetermination determineNJW = determineNJW(caseNum, appId, planCategoryId);
-			    return determineNJW;
+		
+		PlanEntity pentity = prepo.findByPlanCategoryId(planCategoryId);
+		if(pentity!=null) {
+	    planName = pentity.getPlanName();
 		}
-		return null;
+		
+		Optional<CitizenDetailsEntity> centity = crepo.findById(appId);
+		if(centity.isPresent()) {
+			 citizenentity = centity.get();
+			LocalDate dob = citizenentity.getDob();
+			LocalDate curr = LocalDate.now();
+		     age = Period.between(dob, curr).getYears();
+		}
+		
+		//EligibilityResponse
+		 EligibilityDetermination edresponse = checkPlanCondition(caseNum, planName, age);
+		 //Eligibility Entity
+		 EligibilityEntity eentity = new EligibilityEntity();
+		 BeanUtils.copyProperties(edresponse, eentity);
+		 
+		 eentity.setCaseNum(caseNum);
+		 eentity.setHolderName(citizenentity.getFullName());
+		 eentity.setHolderSsn(citizenentity.getSsn());
+		 
+		 //save the object 
+		 elrepo.save(eentity);
+		 
+		 CoTrigger coentity = new CoTrigger();
+		 coentity.setCaseNum(caseNum);
+		 coentity.setTriggerStatus("pending");
+		 
+		 //save the object
+		 corepo.save(coentity);
+		
+		return edresponse;
 	}
 	
-	private EligibilityDetermination determineSnap(Long caseNum, Integer appId, Integer planCategoryId) {
+	private EligibilityDetermination checkPlanCondition(Long caseNum, String planName, Integer age) {
+		Double empIncome = 0.0;
+		Double propertyIncome = 0.0;
 		
-		EligibilityEntity eentity = new EligibilityEntity();
-		EligibilityDetermination ed = new EligibilityDetermination();
+		//create Eligibility binding class object
+		EligibilityDetermination edresponse = new EligibilityDetermination();
+		
 		IncomeEntity ientity = irepo.findByCaseNum(caseNum);
-		 Optional<CitizenDetailsEntity>  centity = crepo.findById(appId);
-		 PlanEntity pentity = prepo.findByPlanCategoryId(planCategoryId);
-		if(ientity != null && centity.isPresent() && pentity!=null) {
-			   CitizenDetailsEntity centity1 = centity.get();
-			if(ientity.getEmpIncome() <= 300) {
-				eentity.setCaseNum(caseNum);
-				eentity.setHolderName(centity1.getFullName());
-				eentity.setCaseNum(centity1.getSsn());
-				eentity.setPlanName(pentity.getPlanName());
-				eentity.setPlanStartDate(pentity.getUpdatedDate());
-				eentity.setPlanEndDate(pentity.getPlanEndDate());
-				eentity.setPlanStatus("Approved");
-				eentity.setBenefitAmnt(300.0);
-				eentity.setDenialReason("NA");
-				elrepo.save(eentity);
+		if(ientity != null) {
+			 empIncome = ientity.getEmpIncome();
+			 propertyIncome = ientity.getPropertyIncome();
+		}
+		
+		if(planName.equals("SNAP")) {
+			if(empIncome <= 300) {
+				edresponse.setPlanStatus("Approved");
 			}
 			else {
-				eentity.setPlanStatus("Denied");
-				eentity.setDenialReason("Income condition failed");
-				elrepo.save(eentity);
+				edresponse.setPlanStatus("Denied");
+				edresponse.setDenialReason("High Income");
 			}
-			BeanUtils.copyProperties(eentity, ed);
-			return ed;
 		}
-		return null;
-	}
-	
-	private EligibilityDetermination determineCcap(Long caseNum, Integer appId, Integer planCategoryId) {
-		EligibilityEntity eentity = new EligibilityEntity();
-		EligibilityDetermination ed = new EligibilityDetermination();
-		IncomeEntity ientity = irepo.findByCaseNum(caseNum);
-		 Optional<CitizenDetailsEntity>  centity = crepo.findById(appId);
-		 PlanEntity pentity = prepo.findByPlanCategoryId(planCategoryId);
-		 List<KidsEntity> kidslst = krepo.findByCaseNum(caseNum);
-		if(ientity != null && centity.isPresent() && pentity!=null && kidslst != null) {
-			 CitizenDetailsEntity centity1 = centity.get();
-			 if(ientity.getEmpIncome() <= 300) {
-				 for(KidsEntity kentity : kidslst) {
-					 if(kentity.getAge()<=16) {
-						    eentity.setCaseNum(caseNum);
-							eentity.setHolderName(centity1.getFullName());
-							eentity.setCaseNum(centity1.getSsn());
-							eentity.setPlanName(pentity.getPlanName());
-							eentity.setPlanStartDate(pentity.getUpdatedDate());
-							eentity.setPlanEndDate(pentity.getPlanEndDate());
-							eentity.setPlanStatus("Approved");
-							eentity.setBenefitAmnt(400.0);
-							eentity.setDenialReason("NA");
-							elrepo.save(eentity);
-					 }//if
-					 else {
-						 eentity.setPlanStatus("Denied");
-						 eentity.setDenialReason("Kids age condition failed");
-						 elrepo.save(eentity);
-					 }//else
-				 }//for
-				 
-			 }//if
-			 else {
-				 eentity.setPlanStatus("Denied");
-				 eentity.setDenialReason("Income condition failed");
-				 elrepo.save(eentity);
-			 }//else
-			 BeanUtils.copyProperties(eentity, ed);
-				return ed; 
-		}
-		 return null;
-	}
-	
-private EligibilityDetermination determineMedicait(Long caseNum, Integer appId, Integer planCategoryId) {
-		
-		EligibilityEntity eentity = new EligibilityEntity();
-		EligibilityDetermination ed = new EligibilityDetermination();
-		IncomeEntity ientity = irepo.findByCaseNum(caseNum);
-		 Optional<CitizenDetailsEntity>  centity = crepo.findById(appId);
-		 PlanEntity pentity = prepo.findByPlanCategoryId(planCategoryId);
-		if(ientity != null && centity.isPresent() && pentity!=null) {
-			   CitizenDetailsEntity centity1 = centity.get();
-			if(ientity.getEmpIncome() <= 300 && ientity.getPropertyIncome() == 0.0) {
-				eentity.setCaseNum(caseNum);
-				eentity.setHolderName(centity1.getFullName());
-				eentity.setCaseNum(centity1.getSsn());
-				eentity.setPlanName(pentity.getPlanName());
-				eentity.setPlanStartDate(pentity.getUpdatedDate());
-				eentity.setPlanEndDate(pentity.getPlanEndDate());
-				eentity.setPlanStatus("Approved");
-				eentity.setBenefitAmnt(300.0);
-				eentity.setDenialReason("NA");
-				elrepo.save(eentity);
+		else if(planName.equals("CCAP")) {
+			
+			Boolean kidsCountCondition = false;
+			Boolean kidsAgeCondition = true;
+			
+			List<KidsEntity> kids = krepo.findByCaseNum(caseNum);
+			if(!kids.isEmpty()) {
+			    kidsCountCondition = true;
+			    for(KidsEntity kid : kids) {
+			    	if(kid.getAge() > 16) {
+			    		kidsAgeCondition = false;
+			    		break;
+			    	}
+			    }
+			}
+			//check the condition for CCAP
+			if(empIncome <= 300 && kidsCountCondition && kidsAgeCondition) {
+				edresponse.setPlanStatus("Approved");
 			}
 			else {
-				eentity.setPlanStatus("Denied");
-				eentity.setDenialReason("Income condition failed");
-				elrepo.save(eentity);
+				edresponse.setPlanStatus("Denied");
+				edresponse.setDenialReason("High Income, kidsCountCondition and kidsAgeConditon failed");
 			}
-			BeanUtils.copyProperties(eentity, ed);
-			return ed;
+			
 		}
-		return null;
-	}
-
-private EligibilityDetermination determineMedicare(Long caseNum, Integer appId, Integer planCategoryId) {
-	
-	EligibilityEntity eentity = new EligibilityEntity();
-	EligibilityDetermination ed = new EligibilityDetermination();
-	IncomeEntity ientity = irepo.findByCaseNum(caseNum);
-	 Optional<CitizenDetailsEntity>  centity = crepo.findById(appId);
-	 PlanEntity pentity = prepo.findByPlanCategoryId(planCategoryId);
-	if(ientity != null && centity.isPresent() && pentity!=null) {
-		   CitizenDetailsEntity centity1 = centity.get();
-		if(centity1.getAge()>= 65) {
-			eentity.setCaseNum(caseNum);
-			eentity.setHolderName(centity1.getFullName());
-			eentity.setCaseNum(centity1.getSsn());
-			eentity.setPlanName(pentity.getPlanName());
-			eentity.setPlanStartDate(pentity.getUpdatedDate());
-			eentity.setPlanEndDate(pentity.getPlanEndDate());
-			eentity.setPlanStatus("Approved");
-			eentity.setBenefitAmnt(300.0);
-			eentity.setDenialReason("NA");
-			elrepo.save(eentity);
+        else if(planName.equals("Medicaide")) {
+			if(empIncome <= 300 && propertyIncome == 0) {
+				edresponse.setPlanStatus("Approved");
+			}
+			else {
+				edresponse.setPlanStatus("Denied");
+				edresponse.setDenialReason("High Income");
+			}
 		}
-		else {
-			eentity.setPlanStatus("Denied");
-			eentity.setDenialReason("Age condition failed");
-			elrepo.save(eentity);
+       else if(planName.equals("Medicare")) {
+			if(age > 65) {
+				edresponse.setPlanStatus("Approved");
+			}
+			else {
+				edresponse.setPlanStatus("Denied");
+				edresponse.setDenialReason("Age condition failed");
+			}
 		}
-		BeanUtils.copyProperties(eentity, ed);
-		return ed;
-	}
-	return null;
-}
-
-private EligibilityDetermination determineNJW(Long caseNum, Integer appId, Integer planCategoryId) {
-	
-	EligibilityEntity eentity = new EligibilityEntity();
-	EligibilityDetermination ed = new EligibilityDetermination();
-	IncomeEntity ientity = irepo.findByCaseNum(caseNum);
-	 Optional<CitizenDetailsEntity>  centity = crepo.findById(appId);
-	 PlanEntity pentity = prepo.findByPlanCategoryId(planCategoryId);
-	 EducationEntity eduentity = erepo.findByCaseNum(caseNum);
-	if(ientity != null && centity.isPresent() && pentity!=null &&  eduentity!= null) {
-		   CitizenDetailsEntity centity1 = centity.get();
-		if(ientity.getEmpIncome() == 0.0 && eduentity.getQualification().equalsIgnoreCase("Graduation")) {
-			eentity.setCaseNum(caseNum);
-			eentity.setHolderName(centity1.getFullName());
-			eentity.setCaseNum(centity1.getSsn());
-			eentity.setPlanName(pentity.getPlanName());
-			eentity.setPlanStartDate(pentity.getUpdatedDate());
-			eentity.setPlanEndDate(pentity.getPlanEndDate());
-			eentity.setPlanStatus("Approved");
-			eentity.setBenefitAmnt(300.0);
-			eentity.setDenialReason("NA");
-			elrepo.save(eentity);
+       else if(planName.equals("NJW")) {
+			EducationEntity eentity = erepo.findByCaseNum(caseNum);
+			if(eentity != null) {
+				Integer graduateYear = eentity.getYear();
+				int currYear = LocalDate.now().getYear();
+				if(empIncome == 0 && graduateYear < currYear) {
+					edresponse.setPlanStatus("Approved");
+				}
+				else {
+					edresponse.setPlanStatus("Denied");
+					edresponse.setDenialReason("Income and Graduation condition failed");
+				}
+			}
 		}
-		else {
-			eentity.setPlanStatus("Denied");
-			eentity.setDenialReason("Income and education contition failed");
-			elrepo.save(eentity);
+		
+		if(edresponse.getPlanStatus().equals("Approved")) {
+			edresponse.setPlanStartDate(LocalDate.now());
+			edresponse.setPlanEndDate(LocalDate.now().plusMonths(10));
+			edresponse.setBenefitAmnt(500.0);
+			edresponse.setDenialReason("NA");
 		}
-		BeanUtils.copyProperties(eentity, ed);
-		return ed;
-	}
-	return null;
+		
+		
+	return edresponse;
 }
 		
 }
