@@ -37,8 +37,6 @@ public class CitizenDetailsEntity {
 	
 	private LocalDate dob;
 	
-	private Integer age;
-	
 	@Column(name="CREATED_DATE", updatable = false )
 	@CreationTimestamp
 	private LocalDate createdDate;
