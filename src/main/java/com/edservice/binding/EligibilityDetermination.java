@@ -1,6 +1,5 @@
 package com.edservice.binding;
 
-import java.time.LocalDate;
 
 import lombok.Data;
 
@@ -9,9 +8,9 @@ public class EligibilityDetermination {
 	
 	private String planName;
 	private String planStatus;
-	private LocalDate planStartDate;
-	private LocalDate planEndDate;
-	private Double benefitAmnt;
+	private String planStartDate;
+	private String planEndDate;
+	private String benefitAmnt;
 	private String denialReason;
 
 }

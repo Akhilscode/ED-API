@@ -112,7 +112,7 @@ public class EDServiceImpl implements EDService {
 		
 		//create Eligibility binding class object
 		EligibilityDetermination edresponse = new EligibilityDetermination();
-		
+		edresponse.setPlanName(planName);
 		IncomeEntity ientity = irepo.findByCaseNum(caseNum);
 		if(ientity != null) {
 			 empIncome = ientity.getEmpIncome();
@@ -187,12 +187,16 @@ public class EDServiceImpl implements EDService {
 		}
 		
 		if(edresponse.getPlanStatus().equals("Approved")) {
-			edresponse.setPlanStartDate(LocalDate.now());
-			edresponse.setPlanEndDate(LocalDate.now().plusMonths(10));
-			edresponse.setBenefitAmnt(500.0);
+			edresponse.setPlanStartDate(LocalDate.now().toString());
+			edresponse.setPlanEndDate(LocalDate.now().plusMonths(10).toString());
+			edresponse.setBenefitAmnt("500.0");
 			edresponse.setDenialReason("NA");
+		}else {
+			edresponse.setBenefitAmnt("NA");
+			edresponse.setBenefitAmnt("NA");
+			edresponse.setPlanStartDate("NA");			
+			edresponse.setPlanEndDate("NA");
 		}
-		
 		
 	return edresponse;
 }

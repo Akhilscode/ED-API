@@ -25,10 +25,10 @@ public class EligibilityEntity {
 	private String planName;
 	private String holderName;
 	private Long holderSsn;
-	private LocalDate planStartDate;
-	private LocalDate planEndDate;
+	private String planStartDate;
+	private String planEndDate;
 	private String planStatus;
-	private Double benefitAmnt;
+	private String benefitAmnt;
 	private String denialReason;
 	
 	@CreationTimestamp
