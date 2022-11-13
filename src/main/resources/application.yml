@@ -8,7 +8,7 @@ spring:
      url : jdbc:mysql://localhost:3306/jrtp
      username: root
      password: root
-     driver-class-name: com.mysql.jdbc.Driver
+     driver-class-name: com.mysql.cj.jdbc.Driver
      dialect: org.hibernate.dialect.MySQL8Dialect
   jpa:
     hibernate:

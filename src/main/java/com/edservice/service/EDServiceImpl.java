@@ -153,7 +153,7 @@ public class EDServiceImpl implements EDService {
 			}
 			
 		}
-        else if(planName.equals("Medicaide")) {
+        else if(planName.equals("Medicaid")) {
 			if(empIncome <= 300 && propertyIncome == 0) {
 				edresponse.setPlanStatus("Approved");
 			}
